@@ -6,7 +6,7 @@ import os
 import cv2
 from tqdm import tqdm
 
-from rt_gene.extract_landmarks_method_base import LandmarkMethodBase
+from rt_gene.src.rt_gene.extract_landmarks_method_base import LandmarkMethodBase
 
 script_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -17,9 +17,9 @@ if __name__ == "__main__":
     parser.add_argument('--output_path', type=str, default=os.path.join(script_path, '../samples/'), help='Output directory for left/right eye patches')
 
     landmark_estimator = LandmarkMethodBase(device_id_facedetection="cuda:0",
-                                            checkpoint_path_face=os.path.join(script_path, "../../rt_gene/model_nets/SFD/s3fd_facedetector.pth"),
-                                            checkpoint_path_landmark=os.path.join(script_path, "../../rt_gene/model_nets/phase1_wpdc_vdc.pth.tar"),
-                                            model_points_file=os.path.join(script_path, "../../rt_gene/model_nets/face_model_68.txt"))
+                                            checkpoint_path_face=os.path.join(script_path, "../../../rt_gene/model_nets/SFD/s3fd_facedetector.pth"),
+                                            checkpoint_path_landmark=os.path.join(script_path, "../../../rt_gene/model_nets/phase1_wpdc_vdc.pth.tar"),
+                                            model_points_file=os.path.join(script_path, "../../../rt_gene/model_nets/face_model_68.txt"))
 
     args = parser.parse_args()
 
