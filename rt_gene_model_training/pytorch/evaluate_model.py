@@ -33,10 +33,11 @@ def test_fold(d_loader, model_list, fold_idx, model_idx="Ensemble"):
 
     angle_criterion_acc_arr = np.array(angle_criterion_acc)
     tqdm.write(
-        "\r\n\tFold: {}, Model: {}, Mean: {}, STD: {}".format(fold_idx, model_idx, np.mean(angle_criterion_acc_arr), np.std(angle_criterion_acc_arr)))
+        "\r\n\tFold: {}, Model: {}, Mean: {}, STD: {}".format(fold_idx, model_idx, np.mean(angle_criterion_acc_arr),
+                                                              np.std(angle_criterion_acc_arr)))
+
 
 def rename_state_dict(to_load):
-
     toReturn = OrderedDict()
     for each_key in to_load.keys():
         new_key = each_key[7:]
@@ -46,15 +47,16 @@ def rename_state_dict(to_load):
     return toReturn
 
 
-
 if __name__ == "__main__":
     torch.backends.cudnn.benchmark = True
 
     root_dir = os.path.dirname(os.path.realpath(__file__))
 
     root_parser = ArgumentParser(add_help=False)
-    root_parser.add_argument('--model_loc', type=str, required=False, help='path to the model files to evaluate', action="append")
-    root_parser.add_argument('--hdf5_file', type=str, default=os.path.abspath(os.path.join(root_dir, "../../RT_GENE/rtgene_dataset.hdf5")))
+    root_parser.add_argument('--model_loc', type=str, required=False, help='path to the model files to evaluate',
+                             action="append")
+    root_parser.add_argument('--hdf5_file', type=str,
+                             default=os.path.abspath(os.path.join(root_dir, "../../RT_GENE/rtgene_dataset.hdf5")))
     root_parser.add_argument('--num_io_workers', default=8, type=int)
     root_parser.add_argument('--loss_fn', choices=["mse", "pinball"], default="mse")
     root_parser.add_argument('--model_base', choices=["vgg", "resnet18_0", "preactresnet"], default="vgg")
@@ -91,7 +93,8 @@ if __name__ == "__main__":
 
         for fold_idx, test_subject in enumerate(test_subjects):
             data_test = RTGENEH5Dataset(h5_file=h5py.File(hyperparams.hdf5_file, mode="r"), subject_list=test_subject)
-            data_loader = DataLoader(data_test, batch_size=hyperparams.batch_size, shuffle=True, num_workers=hyperparams.num_io_workers, pin_memory=False)
+            data_loader = DataLoader(data_test, batch_size=hyperparams.batch_size, shuffle=True,
+                                     num_workers=hyperparams.num_io_workers, pin_memory=False)
             test_fold(data_loader, fold_idx=fold_idx, model_list=_models_list)
     else:
         folds = [os.path.abspath(os.path.join(hyperparams.model_loc, "fold_{}/".format(i))) for i in range(3)]
@@ -101,8 +104,10 @@ if __name__ == "__main__":
             epoch_ckpt = glob.glob(os.path.abspath(os.path.join(fold, "*.ckpt")))
             for ckpt in tqdm(epoch_ckpt, desc="Checkpoint evaluation.."):
                 # load data
-                data_test = RTGENEH5Dataset(h5_file=h5py.File(hyperparams.hdf5_file, mode="r"), subject_list=test_subject)
-                data_loader = DataLoader(data_test, batch_size=hyperparams.batch_size, shuffle=True, num_workers=hyperparams.num_io_workers, pin_memory=False)
+                data_test = RTGENEH5Dataset(h5_file=h5py.File(hyperparams.hdf5_file, mode="r"),
+                                            subject_list=test_subject)
+                data_loader = DataLoader(data_test, batch_size=hyperparams.batch_size, shuffle=True,
+                                         num_workers=hyperparams.num_io_workers, pin_memory=False)
 
                 model = _models.get(hyperparams.model_base)()
                 model.load_state_dict(torch.load(ckpt))
