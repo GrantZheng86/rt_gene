@@ -11,7 +11,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
 
-from rt_gene.gaze_estimation_models_pytorch import GazeEstimationModelResnet18, GazeEstimationModelVGG, \
+from rt_gene.src.rt_gene.gaze_estimation_models_pytorch import GazeEstimationModelResnet18, GazeEstimationModelVGG, \
     GazeEstimationModelPreactResnet
 from rtgene_dataset import RTGENEH5Dataset
 from utils.GazeAngleAccuracy import GazeAngleAccuracy
@@ -41,7 +41,7 @@ class TrainRTGENE(pl.LightningModule):
         self._train_subjects = train_subjects
         self._validate_subjects = validate_subjects
         self._test_subjects = test_subjects
-        self.hparams = hparams
+        self.save_hyperparameters(hparams)
 
     def forward(self, left_patch, right_patch, head_pose):
         return self._model(left_patch, right_patch, head_pose)
@@ -102,7 +102,7 @@ class TrainRTGENE(pl.LightningModule):
         parser.add_argument('--loss_fn', choices=["mse", "pinball"], default="mse")
         parser.add_argument('--batch_size', default=128, type=int)
         parser.add_argument('--batch_norm', default=True, type=bool)
-        parser.add_argument('--learning_rate', type=float, default=0.0003)
+        parser.add_argument('--learning_rate', type=float, default=0.00005)
         parser.add_argument('--model_base', choices=["vgg16", "resnet18", "preactresnet"], default="vgg16")
         return parser
 
@@ -144,7 +144,7 @@ if __name__ == "__main__":
 
     _root_parser = ArgumentParser(add_help=False)
     _root_parser.add_argument('--gpu', type=int, default=1,
-                              help='gpu to use, can be repeated for mutiple gpus i.e. --gpu 1 --gpu 2', action="append")
+                              help='gpu to use, can be repeated for mutiple gpus i.e. --gpu 1 --gpu 2')
     _root_parser.add_argument('--hdf5_file', type=str,
                               default=os.path.abspath(os.path.join(root_dir, "../../RT_GENE/rtgene_dataset.hdf5")))
     _root_parser.add_argument('--dataset', type=str, choices=["rt_gene", "other"], default="rt_gene")
@@ -210,12 +210,13 @@ if __name__ == "__main__":
                              validate_subjects=valid_s,
                              test_subjects=test_s)
         # save all models
-        checkpoint_callback = ModelCheckpoint(filepath=os.path.join(complete_path, "{epoch}-{val_loss:.3f}"),
+        checkpoint_callback = ModelCheckpoint(dirpath=complete_path,
+                                              filename="{epoch}-{val_loss:.3f}",
                                               monitor='val_loss', mode='min', verbose=False,
                                               save_top_k=-1 if not _hyperparams.augment else 5)
 
         # start training
-        trainer = Trainer(gpus=_hyperparams.gpu,
+        trainer = Trainer(gpus=[0, 1],
                           precision=32,
                           callbacks=[checkpoint_callback],
                           progress_bar_refresh_rate=1,

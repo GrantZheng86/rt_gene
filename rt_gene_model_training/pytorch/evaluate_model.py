@@ -8,8 +8,9 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from collections import OrderedDict
 
-from rt_gene.gaze_estimation_models_pytorch import GazeEstimationModelResnet18, \
+from rt_gene.src.rt_gene.gaze_estimation_models_pytorch import GazeEstimationModelResnet18, \
     GazeEstimationModelVGG, GazeEstimationModelPreactResnet
 from rtgene_dataset import RTGENEH5Dataset
 from utils.GazeAngleAccuracy import GazeAngleAccuracy
@@ -33,6 +34,17 @@ def test_fold(d_loader, model_list, fold_idx, model_idx="Ensemble"):
     angle_criterion_acc_arr = np.array(angle_criterion_acc)
     tqdm.write(
         "\r\n\tFold: {}, Model: {}, Mean: {}, STD: {}".format(fold_idx, model_idx, np.mean(angle_criterion_acc_arr), np.std(angle_criterion_acc_arr)))
+
+def rename_state_dict(to_load):
+
+    toReturn = OrderedDict()
+    for each_key in to_load.keys():
+        new_key = each_key[7:]
+        content = to_load[each_key]
+        toReturn[new_key] = content
+
+    return toReturn
+
 
 
 if __name__ == "__main__":
@@ -70,7 +82,9 @@ if __name__ == "__main__":
         _models_list = []
         for model_file in tqdm(hyperparams.model_loc, desc="Ensemble Evaluation; Loading models..."):
             _model = _models.get(hyperparams.model_base)()
-            _model.load_state_dict(torch.load(model_file))
+            model_file = torch.load(model_file)['state_dict']
+            model_file = rename_state_dict(model_file)
+            _model.load_state_dict(model_file)
             _model.to("cuda:0")
             _model.eval()
             _models_list.append(_model)
