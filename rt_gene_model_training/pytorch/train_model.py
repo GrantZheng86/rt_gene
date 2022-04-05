@@ -147,7 +147,7 @@ if __name__ == "__main__":
                               help='gpu to use, can be repeated for mutiple gpus i.e. --gpu 1 --gpu 2')
     _root_parser.add_argument('--hdf5_file', type=str,
                               default=os.path.abspath(os.path.join(root_dir, "../../RT_GENE/rtgene_dataset.hdf5")))
-    _root_parser.add_argument('--dataset', type=str, choices=["rt_gene", "other"], default="rt_gene")
+    _root_parser.add_argument('--dataset', type=str, choices=["rt_gene", "mpii", "other"], default="rt_gene")
     _root_parser.add_argument('--save_dir', type=str, default=os.path.abspath(
         os.path.join(root_dir, '../../rt_gene/model_nets/pytorch_checkpoints')))
     _root_parser.add_argument('--benchmark', action='store_true', dest="benchmark")
@@ -187,8 +187,24 @@ if __name__ == "__main__":
             _train_subjects.append([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
             _valid_subjects.append([0])  # Note that this is a hack and should not be used to get results for papers
             _test_subjects.append([0])
+    elif _hyperparams.dataset == 'mpii':
+        _train_subjects.append([0, 1, 6, 7, 8, 11, 12])
+        _train_subjects.append([1, 2, 3, 8, 13, 14])
+        _train_subjects.append([1, 3, 11, 12, 13, 14, 6, 7])
+
+        _valid_subjects.append([4, 5, 9, 10])
+        _valid_subjects.append([4, 5, 9, 10])
+        _valid_subjects.append([4, 5, 9, 10])
+
+
+        # Dummy test subjects
+        _test_subjects.append([1])
+        _test_subjects.append([1])
+        _test_subjects.append([1])
+
+
     else:
-        file = h5py.File(_hyperparams.hdf5_file, mode="r")
+        file = h5py.File(_hyperparams.hdf5_file, mode="r", driver='core')
         keys = [int(subject[1:]) for subject in list(file.keys())]
         file.close()
         if _hyperparams.k_fold_validation:
@@ -216,7 +232,7 @@ if __name__ == "__main__":
                                               save_top_k=-1 if not _hyperparams.augment else 5)
 
         # start training
-        trainer = Trainer(gpus=[0, 1],
+        trainer = Trainer(gpus=[0],
                           precision=32,
                           callbacks=[checkpoint_callback],
                           progress_bar_refresh_rate=1,

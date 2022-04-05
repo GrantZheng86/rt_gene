@@ -1,56 +1,21 @@
-import glob
-import os
-from argparse import ArgumentParser
-from functools import partial
-
 import h5py
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from collections import OrderedDict
+import os
+from functools import partial
+import glob
 
+from argparse import ArgumentParser
 from rt_gene.src.rt_gene.gaze_estimation_models_pytorch import GazeEstimationModelResnet18, \
     GazeEstimationModelVGG, GazeEstimationModelPreactResnet
 from rtgene_dataset import RTGENEH5Dataset
 from utils.GazeAngleAccuracy import GazeAngleAccuracy
+from evaluate_model import rename_state_dict, test_fold
 
-
-def test_fold(d_loader, model_list, fold_idx, model_idx="Ensemble"):
-    assert type(model_list) is list, "model_list should be a list of models"
-    criterion = GazeAngleAccuracy()
-    angle_criterion_acc = []
-    p_bar = tqdm(d_loader)
-    for left, right, headpose, gaze_labels in p_bar:
-        p_bar.set_description("Testing Fold {}, Model \"{}\"...".format(fold_idx, model_idx))
-        left = left.to("cuda:0")
-        right = right.to("cuda:0")
-        headpose = headpose.to("cuda:0")
-        angle_out = [_m(left, right, headpose).detach().cpu() for _m in model_list]
-        angle_out = torch.stack(angle_out, dim=1)
-        angle_out = torch.mean(angle_out, dim=1)
-        angle_acc = criterion(angle_out[:, :2], gaze_labels)
-        angle_criterion_acc.append(angle_acc)
-
-    angle_criterion_acc_arr = np.array(angle_criterion_acc)
-    tqdm.write(
-        "\r\n\tFold: {}, Model: {}, Mean: {}, STD: {}".format(fold_idx, model_idx, np.mean(angle_criterion_acc_arr),
-                                                              np.std(angle_criterion_acc_arr)))
-
-
-def rename_state_dict(to_load):
-    toReturn = OrderedDict()
-    for each_key in to_load.keys():
-        new_key = each_key[7:]
-        content = to_load[each_key]
-        toReturn[new_key] = content
-
-    return toReturn
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     torch.backends.cudnn.benchmark = True
-
     root_dir = os.path.dirname(os.path.realpath(__file__))
 
     root_parser = ArgumentParser(add_help=False)
@@ -58,7 +23,7 @@ if __name__ == "__main__":
                              action="append")
     root_parser.add_argument('--hdf5_file', type=str,
                              default=os.path.abspath(os.path.join(root_dir, "../../RT_GENE/rtgene_dataset.hdf5")))
-    root_parser.add_argument('--num_io_workers', default=8, type=int)
+    root_parser.add_argument('--num_io_workers', default=0, type=int)
     root_parser.add_argument('--loss_fn', choices=["mse", "pinball"], default="mse")
     root_parser.add_argument('--model_base', choices=["vgg", "resnet18_0", "preactresnet"], default="vgg")
     root_parser.add_argument('--batch_size', default=64, type=int)
@@ -75,9 +40,8 @@ if __name__ == "__main__":
         "preactresnet": partial(GazeEstimationModelPreactResnet, num_out=_param_num.get(hyperparams.loss_fn))
     }
 
-    # test_subjects = [[5, 6, 11, 12, 13], [3, 4, 7, 9], [1, 2, 8, 10]]
-    test_subjects = [[8]]
-
+    test_subjects = [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10]]
+    criterion = GazeAngleAccuracy()
 
     # definition of an ensemble is a list of FILES, if any are folders, then not an ensemble
     ensemble = sum([os.path.isfile(s) for s in hyperparams.model_loc]) == len(hyperparams.model_loc)
@@ -117,3 +81,4 @@ if __name__ == "__main__":
                 model.eval()
 
                 test_fold(data_loader, model_list=[model], fold_idx=fold_idx, model_idx=os.path.basename(ckpt))
+
