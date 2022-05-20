@@ -41,6 +41,7 @@ def load_and_augment(file_path, augment=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Estimate gaze from images')
     parser.add_argument('--rt_gene_root', type=str, required=True, nargs='?', help='Path to the base directory of RT_GENE')
+    parser.add_argument('--rt_gene_name', type=str, default='rtgene_dataset')
     parser.add_argument('--augment_dataset', type=bool, required=False, default=False, help="Whether to augment the dataset with predefined transforms")
     parser.add_argument('--compress', action='store_true', dest="compress")
     parser.add_argument('--no-compress', action='store_false', dest="compress")
@@ -51,7 +52,7 @@ if __name__ == "__main__":
 
     subject_path = [os.path.join(args.rt_gene_root, "s{:03d}_glasses/".format(_i)) for _i in range(0, 17)]
 
-    hdf_file = h5py.File(os.path.abspath(os.path.join(args.rt_gene_root, 'rtgene_dataset.hdf5')), mode='w')
+    hdf_file = h5py.File(os.path.abspath(os.path.join(args.rt_gene_root, "{}.hdf5".format(args.rt_gene_name))), mode='w')
     for subject_id, subject_data in enumerate(subject_path):
         subject_id = str("s{:03d}".format(subject_id))
         subject_grp = hdf_file.create_group(subject_id)
