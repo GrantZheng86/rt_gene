@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 from glob import glob
 from math import asin, atan2
 
@@ -11,7 +12,8 @@ from PIL import ImageFilter, ImageOps
 from torchvision import transforms
 from tqdm import tqdm
 
-image_number_list = ['009119', '014750', '010500', '012058', '014236', '020442']
+image_number_list = [['009119', '014750', '010500', '012058', '014236', '020442'],
+                     ['002895', '002511', '015603', '021077', '019136', '014284']]
 
 _required_size = (224, 224)
 _transforms_list = [transforms.RandomResizedCrop(size=_required_size, scale=(0.85, 1.0)),
@@ -46,15 +48,27 @@ def offset_cropping(img, warp_mat):
     w_offset = [0, 10, 20, 30, 40, 50]
     h_offset = [0, 5, 10, 15, 20, 25]
     side = 'left' if saving_left else 'right'
-    saving_location = r'E:\Gaze_Uncertainty_11_10\V0.01\Fold_0\Offset_experiments'
+    saving_location = r'E:\Gaze_Uncertainty_11_10\V0.01\{}\Offset_experiments'.format(subject_id)
+    folder_name = os.path.join(saving_location, 'Horizontal', side)
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
+
+    folder_name = os.path.join(saving_location, 'Vertical', side)
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
 
     for i, w in enumerate(w_offset):
         roi_size = (default_w + w, default_h)
         img_warped = cv2.warpPerspective(img, warp_mat, roi_size)
-        desired_region = img_warped[-36:, -60:, :]
+        desired_region_h = img_warped[-36:, -60:, :]
+        roi_size = (default_w, default_h + h_offset[i])
+        img_warped = cv2.warpPerspective(img, warp_mat, roi_size)
+        desired_region_v = img_warped[-36:, -60:, :]
         saving_name = "{}_{}_offset_{}.jpg".format(image_name, side, w)
-        total_name = os.path.join(saving_location, saving_name)
-        cv2.imwrite(total_name, desired_region)
+        total_name_h = os.path.join(saving_location, 'Horizontal', side, saving_name)
+        total_name_v = os.path.join(saving_location, 'Vertical', side, saving_name)
+        print(cv2.imwrite(total_name_h, desired_region_h))
+        cv2.imwrite(total_name_v, desired_region_v)
 
 
 def normalize_img_with_crop(img, target_3d, head_rotation, gc, roi_size, cam_matrix, focal_new=960, distance_new=600):
@@ -202,7 +216,7 @@ if __name__ == "__main__":
                 right_image, right_headpose, right_gaze = normalize_img(img, right_eye_center, hR, gaze_target,
                                                                         (60, 36), camera_matrix)
                 # Offset Creation
-                if image_name in image_number_list and subject_id == 's000':
+                if image_name in image_number_list[0] and subject_id == 's000':
                     normalize_img_with_crop(img, left_eye_center, hR, gaze_target, (60, 36),
                                             camera_matrix)
 
@@ -210,7 +224,7 @@ if __name__ == "__main__":
                 saving_left = True  # For off cropping purpose
                 left_image, left_headpose, left_gaze = normalize_img(img, left_eye_center, hR, gaze_target, (60, 36),
                                                                      camera_matrix)
-                if image_name in image_number_list and subject_id == 's000':
+                if image_name in image_number_list[0] and subject_id == 's000':
                     normalize_img_with_crop(img, left_eye_center, hR, gaze_target, (60, 36),
                                             camera_matrix)
 
