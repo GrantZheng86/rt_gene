@@ -11,8 +11,11 @@ from PIL import ImageFilter, ImageOps
 from torchvision import transforms
 from tqdm import tqdm
 
+image_number_list = ['009119', '014750', '010500', '012058', '014236', '020442']
+
 _required_size = (224, 224)
-_transforms_list = [transforms.RandomResizedCrop(size=_required_size, scale=(0.85, 1.0)),  # equivalent to random 5px from each edge
+_transforms_list = [transforms.RandomResizedCrop(size=_required_size, scale=(0.85, 1.0)),
+                    # equivalent to random 5px from each edge
                     transforms.RandomResizedCrop(size=_required_size, scale=(0.85, 1.0)),
                     transforms.RandomResizedCrop(size=_required_size, scale=(0.85, 1.0)),
                     transforms.RandomResizedCrop(size=_required_size, scale=(0.85, 1.0)),
@@ -33,6 +36,52 @@ def transform_and_augment(image, augment=False):
     augmented_images.append(np.array(image))
 
     return np.array(augmented_images, dtype=np.uint8)
+
+
+def offset_cropping(img, warp_mat):
+    # TODO: implement height offset
+    default_w = 60
+    default_h = 36
+
+    w_offset = [0, 10, 20, 30, 40, 50]
+    h_offset = [0, 5, 10, 15, 20, 25]
+    side = 'left' if saving_left else 'right'
+    saving_location = r'E:\Gaze_Uncertainty_11_10\V0.01\Fold_0\Offset_experiments'
+
+    for i, w in enumerate(w_offset):
+        roi_size = (default_w + w, default_h)
+        img_warped = cv2.warpPerspective(img, warp_mat, roi_size)
+        desired_region = img_warped[-36:, -60:, :]
+        saving_name = "{}_{}_offset_{}.jpg".format(image_name, side, w)
+        total_name = os.path.join(saving_location, saving_name)
+        cv2.imwrite(total_name, desired_region)
+
+
+def normalize_img_with_crop(img, target_3d, head_rotation, gc, roi_size, cam_matrix, focal_new=960, distance_new=600):
+    """
+    For generating offly cropped images
+    """
+    if roi_size is None:
+        roi_size = (60, 36)
+
+    distance = np.linalg.norm(target_3d)
+    z_scale = distance_new / distance
+    cam_new = np.array([[focal_new, 0, roi_size[0] / 2],
+                        [0.0, focal_new, roi_size[1] / 2],
+                        [0, 0, 1.0]])
+    scale_mat = np.array([[1.0, 0.0, 0.0],
+                          [0.0, 1.0, 0.0],
+                          [0.0, 0.0, z_scale]])
+    h_rx = head_rotation[:, 0]
+    forward = (target_3d / distance)
+    down = np.cross(forward, h_rx)
+    down = down / np.linalg.norm(down)
+    right = np.cross(down, forward)
+    right = right / np.linalg.norm(right)
+
+    rot_mat = np.array([right.T, down.T, forward.T])
+    warp_mat = (cam_new @ scale_mat) @ (rot_mat @ np.linalg.inv(cam_matrix))
+    offset_cropping(img, warp_mat)
 
 
 def normalize_img(img, target_3d, head_rotation, gc, roi_size, cam_matrix, focal_new=960, distance_new=600):
@@ -72,10 +121,28 @@ def normalize_img(img, target_3d, head_rotation, gc, roi_size, cam_matrix, focal
     return img_warped, hrnew, gvnew
 
 
+def visualize_annotations(image, annotations):
+    annotations = np.array(annotations, dtype=int)
+    annotations = np.resize(annotations, (12, 2))
+    vis_img = image.copy()
+
+    for i in range(annotations.shape[0]):
+        curr_point = tuple(annotations[i, :])
+        vis_img = cv2.circle(vis_img, curr_point, 2, (0, 255, 255), -1)
+
+    # cv2.imshow('eye_landmarks', vis_img)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    return vis_img
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Estimate gaze from images')
     parser.add_argument('--mpii_root', type=str, required=True, nargs='?', help='Path to the base directory of MPII')
-    parser.add_argument('--augment_dataset', type=bool, required=False, default=False, help="Whether to augment the dataset with predefined transforms")
+    parser.add_argument('--mpii_face_dir', type=str)
+    parser.add_argument('--augment_dataset', type=bool, required=False, default=False,
+                        help="Whether to augment the dataset with predefined transforms")
     parser.add_argument('--compress', action='store_true', dest="compress")
     parser.add_argument('--no-compress', action='store_false', dest="compress")
     parser.set_defaults(compress=False)
@@ -100,12 +167,27 @@ if __name__ == "__main__":
                 image_annotations = reader.readlines()
 
             for idx, annotation in enumerate(image_annotations):
+                saving_left = False
                 annotations = [float(num) for num in annotation.split(" ")]
                 image_name = "{:0=6d}".format(data_store_idx)
+
                 image_grp = subject_grp.create_group(image_name)
                 data_store_idx += 1
 
                 img = cv2.imread(os.path.join(day, str("{:04d}.jpg".format(idx + 1))))
+
+                if args.mpii_face_dir is not None:
+                    face_path_components = day.split('\\')
+                    face_path_components = os.path.join(args.mpii_face_dir, face_path_components[-2],
+                                                        face_path_components[-1],
+                                                        str("{:04d}.jpg".format(idx + 1)))
+                    if os.path.isfile(face_path_components):
+                        face_image = cv2.imread(face_path_components)
+                    else:
+                        face_image = None
+                else:
+                    face_image = None
+
                 headpose_hr = np.array(annotations[29:32])
                 headpose_ht = np.array(annotations[32:35])
                 hR = cv2.Rodrigues(headpose_hr)[0]
@@ -117,8 +199,23 @@ if __name__ == "__main__":
 
                 gaze_target = np.array(annotations[26:29]).T
 
-                right_image, right_headpose, right_gaze = normalize_img(img, right_eye_center, hR, gaze_target, (60, 36), camera_matrix)
-                left_image, left_headpose, left_gaze = normalize_img(img, left_eye_center, hR, gaze_target, (60, 36), camera_matrix)
+                right_image, right_headpose, right_gaze = normalize_img(img, right_eye_center, hR, gaze_target,
+                                                                        (60, 36), camera_matrix)
+                # Offset Creation
+                if image_name in image_number_list and subject_id == 's000':
+                    normalize_img_with_crop(img, left_eye_center, hR, gaze_target, (60, 36),
+                                            camera_matrix)
+
+
+                saving_left = True  # For off cropping purpose
+                left_image, left_headpose, left_gaze = normalize_img(img, left_eye_center, hR, gaze_target, (60, 36),
+                                                                     camera_matrix)
+                if image_name in image_number_list and subject_id == 's000':
+                    normalize_img_with_crop(img, left_eye_center, hR, gaze_target, (60, 36),
+                                            camera_matrix)
+
+
+
 
                 left_eye_theta = asin(-1 * left_gaze[1])
                 left_eye_phi = atan2(-1 * left_gaze[0], -1 * left_gaze[2])
@@ -148,7 +245,11 @@ if __name__ == "__main__":
                 image_grp.create_dataset("left", data=left_data, compression=_compression)
                 image_grp.create_dataset("right", data=right_data, compression=_compression)
                 image_grp.create_dataset("label", data=labels)
+                image_grp.create_dataset("Raw_patch", data=img, compression=_compression)
+                image_grp.create_dataset("Annotations", data=np.array(annotations))
+
+                if face_image is not None:
+                    image_grp.create_dataset("Face_image", data=np.array(face_image))
 
     hdf_file.flush()
     hdf_file.close()
-
